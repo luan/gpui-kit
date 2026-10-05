@@ -4,9 +4,9 @@ use std::{rc::Rc, sync::LazyLock, time::Duration};
 
 use gpui::{
     Action, Anchor, Animation, AnimationExt as _, AnyElement, App, BoxShadow, ClickEvent, Edges,
-    FocusHandle, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels, RenderOnce,
-    SharedString, StyleRefinement, Styled, Window, WindowControlArea, anchored, div, hsla, point,
-    prelude::FluentBuilder, px,
+    FocusHandle, Hsla, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Pixels,
+    RenderOnce, SharedString, StyleRefinement, Styled, Window, WindowControlArea, anchored, div,
+    hsla, point, prelude::FluentBuilder, px,
 };
 use gpui_base::{ElementExt as _, TextSelectionScopeId};
 use rust_i18n::t;
@@ -26,6 +26,7 @@ pub use gpui_base::actions::{Cancel, Confirm};
 type OkHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) -> bool + 'static>;
 type CancelHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) -> bool + 'static>;
 type CloseHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+type KeyDownHandler = Rc<dyn Fn(&KeyDownEvent, &mut Window, &mut App) + 'static>;
 
 /// Overwrite `slot` only when `value` was explicitly set.
 fn merge_field<T>(slot: &mut Option<T>, value: Option<T>) {
@@ -210,6 +211,7 @@ pub(crate) struct DialogProps {
     overlay_closable: bool,
     pub(crate) overlay_visible: bool,
     keyboard: bool,
+    on_key_down: Option<KeyDownHandler>,
 }
 
 impl Default for DialogProps {
@@ -223,6 +225,7 @@ impl Default for DialogProps {
             overlay_visible: false,
             close_button: true,
             overlay_closable: true,
+            on_key_down: None,
         }
     }
 }
@@ -488,6 +491,16 @@ impl Dialog {
         self
     }
 
+    /// Captures key presses before child controls, only while this dialog is topmost.
+    /// Leave unrelated keys unhandled to preserve native editing and navigation.
+    pub fn capture_key_down(
+        mut self,
+        handler: impl Fn(&KeyDownEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.props.on_key_down = Some(Rc::new(handler));
+        self
+    }
+
     pub(crate) fn has_overlay(&self) -> bool {
         self.props.overlay
     }
@@ -557,6 +570,7 @@ impl RenderOnce for Dialog {
         }
 
         let layer_ix = self.layer_ix;
+        let topmost = (layer_ix + 1) == WindowState::read(window, cx).active_dialogs.len();
         let selection_scope = self.selection_scope;
         let on_close = self.button_props.close_handler();
         let on_ok = self.button_props.ok_handler();
@@ -621,15 +635,18 @@ impl RenderOnce for Dialog {
                     .occlude()
                     .w(view_size.width)
                     .h(view_size.height)
+                    .when(topmost, |this| {
+                        this.when_some(self.props.on_key_down.clone(), |this, handler| {
+                            this.capture_key_down(move |event, window, cx| {
+                                handler(event, window, cx)
+                            })
+                        })
+                    })
                     .child(
                         self.base
                             .take()
                             .expect("Dialog base host is always present")
-                            .layer(
-                                layer_ix,
-                                (self.layer_ix + 1)
-                                    == WindowState::read(window, cx).active_dialogs.len(),
-                            )
+                            .layer(layer_ix, topmost)
                             .focus_handle(self.focus_handle.clone())
                             .close_on_escape(self.props.keyboard)
                             .close_on_backdrop_press(self.props.overlay_closable)

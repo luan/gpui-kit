@@ -136,6 +136,10 @@ name = "overlays"
 required-features = ["test-support", "component"]
 
 [[test]]
+name = "dialog_shortcuts"
+required-features = ["test-support", "component"]
+
+[[test]]
 name = "menu"
 required-features = ["test-support", "component"]
 
