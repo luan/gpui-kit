@@ -39,6 +39,16 @@ pub struct Tooltip {
 }
 
 impl Tooltip {
+    /// Hide this window's managed tooltip and cancel its pending show/hide tasks.
+    ///
+    /// This uses the existing component provider; it does not control GPUI's
+    /// native `.tooltip()` builders. Without a component Root, it does nothing.
+    pub fn dismiss_managed(window: &mut Window, cx: &mut App) {
+        if let Some(overlay) = WindowState::tooltip_overlay(window, cx) {
+            overlay.update(cx, |overlay, cx| overlay.hide(cx));
+        }
+    }
+
     /// Create a Tooltip with a text content.
     pub fn new(text: impl Into<Text>) -> Self {
         Self {
@@ -224,11 +234,12 @@ impl ComponentTooltip {
     }
 }
 
-// ── Internal managed tooltip trait ──────────────────────────────────────────
+// ── Managed tooltips for application-owned triggers ────────────────────────
 
-pub(crate) trait ManagedTooltipExt:
-    StatefulInteractiveElement + crate::ElementExt + Sized
-{
+/// Hover tooltips backed by the window's shared component tooltip provider.
+/// These follow occlusion-aware hover state and can be dismissed with
+/// [`Tooltip::dismiss_managed`], unlike GPUI's native tooltip builder.
+pub trait ManagedTooltipExt: StatefulInteractiveElement + crate::ElementExt + Sized {
     fn managed_tooltip(
         self,
         build_tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static,

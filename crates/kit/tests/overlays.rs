@@ -5,6 +5,7 @@ use gpui_kit::component::{
     dialog::{DialogAction, DialogClose, DialogFooter},
     input::{Input, InputState},
     notification::Notification,
+    tooltip::Tooltip,
 };
 use gpui_kit::test::{TestAppContextExt, TestWindowExt};
 use gpui_kit::{
@@ -361,4 +362,154 @@ async fn alert_dialog_default_buttons_reach_their_dialog_when_focus_was_stolen(
         window.try_find("dialog").is_none()
     })
     .await;
+}
+
+// Application-owned triggers share the same real per-window provider as controls.
+struct ManagedTooltipContent;
+impl Render for ManagedTooltipContent {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        use gpui_kit::test::TestSupportExt as _;
+        div()
+            .id("managed-tooltip-content")
+            .test_support()
+            .child("Creature name")
+    }
+}
+
+struct ManagedTooltipWorkspace {
+    builds: std::rc::Rc<std::cell::Cell<usize>>,
+    popup: Option<Entity<gpui_kit::component::menu::PopupMenu>>,
+}
+impl Render for ManagedTooltipWorkspace {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui_kit::component::{
+            ManagedTooltipExt as _,
+            menu::{PopupMenu, PopupMenuItem},
+        };
+        use gpui_kit::test::TestSupportExt as _;
+        let builds = self.builds.clone();
+        div()
+            .size_full()
+            .child(
+                div()
+                    .id("managed-trigger")
+                    .test_support()
+                    .w(px(200.))
+                    .h(px(60.))
+                    .child("Creature row")
+                    .managed_tooltip(move |_, cx| {
+                        builds.set(builds.get() + 1);
+                        cx.new(|_| ManagedTooltipContent).into()
+                    })
+                    .on_mouse_up(
+                        gpui_kit::MouseButton::Right,
+                        cx.listener(|this, _, window, cx| {
+                            Tooltip::dismiss_managed(window, cx);
+                            this.popup = Some(PopupMenu::build(window, cx, |menu, _, _| {
+                                menu.item(
+                                    PopupMenuItem::new("Read-only action").on_click(|_, _, _| {}),
+                                )
+                            }));
+                            cx.notify();
+                        }),
+                    ),
+            )
+            .child(
+                div()
+                    .id("managed-away")
+                    .test_support()
+                    .absolute()
+                    .left(px(250.))
+                    .size(px(60.)),
+            )
+            .children(self.popup.as_ref().map(|menu| {
+                gpui_kit::deferred(
+                    gpui_kit::anchored()
+                        .position(gpui_kit::point(px(0.), px(0.)))
+                        .child(menu.clone()),
+                )
+                .with_priority(gpui_kit::base::POPUP_PRIORITY)
+            }))
+    }
+}
+
+#[gpui_kit::test]
+fn managed_tooltip_dismisses_pending_and_visible_content(cx: &mut TestAppContext) {
+    use pretty_assertions::assert_eq;
+    cx.update(gpui_kit::init);
+    let builds = std::rc::Rc::new(std::cell::Cell::new(0));
+    let (handle, _) = common::open_window(cx, Some(size(px(600.), px(400.))), |_, cx| {
+        cx.new(|_| ManagedTooltipWorkspace {
+            builds: builds.clone(),
+            popup: None,
+        })
+    });
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.hover("managed-trigger", cx)
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle.into(), |_, window, cx| {
+        Tooltip::dismiss_managed(window, cx)
+    })
+    .unwrap();
+    cx.background_executor.advance_clock(Duration::from_secs(1));
+    cx.run_until_parked();
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("managed-tooltip-content").is_none());
+        assert_eq!(builds.get(), 0);
+        window.hover("managed-away", cx);
+        window.hover("managed-trigger", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.background_executor.advance_clock(Duration::from_secs(1));
+    cx.run_until_parked();
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("managed-tooltip-content").is_some());
+        Tooltip::dismiss_managed(window, cx);
+        window.render_frame(cx);
+        assert!(window.try_find("managed-tooltip-content").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn managed_tooltip_stays_hidden_under_a_later_occluding_popup(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    let builds = std::rc::Rc::new(std::cell::Cell::new(0));
+    let (handle, _) = common::open_window(cx, Some(size(px(600.), px(400.))), |_, cx| {
+        cx.new(|_| ManagedTooltipWorkspace {
+            builds: builds.clone(),
+            popup: None,
+        })
+    });
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.hover("managed-trigger", cx)
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.background_executor.advance_clock(Duration::from_secs(1));
+    cx.run_until_parked();
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("managed-tooltip-content").is_some());
+        window.right_click("managed-trigger", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("popup-menu").is_some());
+        assert!(window.try_find("managed-tooltip-content").is_none());
+    })
+    .unwrap();
+    // Advance the real provider's injected executor clock without moving the pointer.
+    cx.run_until_parked();
+    cx.background_executor.advance_clock(Duration::from_secs(2));
+    cx.run_until_parked();
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("popup-menu").is_some());
+        assert!(window.try_find("managed-tooltip-content").is_none());
+    })
+    .unwrap();
 }
