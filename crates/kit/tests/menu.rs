@@ -1,5 +1,8 @@
 mod common;
-use gpui_kit::component::{button::Button, menu::DropdownMenu};
+use gpui_kit::component::{
+    button::Button,
+    menu::{ContextMenuExt, DropdownMenu, PopupMenuItem},
+};
 use gpui_kit::test::{TestAppContextExt, TestSupportExt, TestWindowExt};
 use gpui_kit::{
     AppContext, Context, InputEvent, TestAppContext, Window, actions, div, prelude::*, px, size,
@@ -410,4 +413,147 @@ async fn parent_and_child_actions_remain_clickable_with_a_submenu_open(cx: &mut 
         })
         .unwrap();
     }
+}
+
+struct NestedContextCommands {
+    parent_opened: usize,
+    child_opened: usize,
+    parent_chosen: usize,
+    child_chosen: usize,
+}
+
+impl Render for NestedContextCommands {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let parent = cx.entity();
+        let child = parent.clone();
+        div().size_full().p_4().child(
+            div()
+                .id("parent-region")
+                .test_support()
+                .w(px(320.))
+                .h(px(240.))
+                .p_4()
+                .child(
+                    div()
+                        .id("child-region")
+                        .test_support()
+                        .w(px(120.))
+                        .h(px(80.))
+                        .child("Child")
+                        .context_menu(move |menu, window, cx| {
+                            child.update(cx, |view, cx| {
+                                view.child_opened += 1;
+                                cx.notify();
+                            });
+                            let chosen = child.clone();
+                            menu.submenu("More", window, cx, move |menu, _, _| {
+                                let chosen = chosen.clone();
+                                menu.item(PopupMenuItem::new("Child command").on_click(
+                                    move |_, _, cx| {
+                                        chosen.update(cx, |view, cx| {
+                                            view.child_chosen += 1;
+                                            cx.notify();
+                                        });
+                                    },
+                                ))
+                            })
+                        }),
+                )
+                .context_menu(move |menu, _, cx| {
+                    parent.update(cx, |view, cx| {
+                        view.parent_opened += 1;
+                        cx.notify();
+                    });
+                    let chosen = parent.clone();
+                    menu.item(
+                        PopupMenuItem::new("Parent command").on_click(move |_, _, cx| {
+                            chosen.update(cx, |view, cx| {
+                                view.parent_chosen += 1;
+                                cx.notify();
+                            });
+                        }),
+                    )
+                }),
+        )
+    }
+}
+
+#[gpui_kit::test]
+fn nested_context_menu_opens_only_the_nearest_menu_and_first_pointer_choice_dismisses_it(
+    cx: &mut TestAppContext,
+) {
+    cx.update(gpui_kit::init);
+    let (handle, view) = common::open_window(cx, Some(size(px(640.), px(480.))), |_, cx| {
+        cx.new(|_| NestedContextCommands {
+            parent_opened: 0,
+            child_opened: 0,
+            parent_chosen: 0,
+            child_chosen: 0,
+        })
+    });
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        window.right_click("child-region", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.child_opened, 1);
+        assert_eq!(view.parent_opened, 0);
+    });
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        // A single public scope must exist, not covered copies of another menu.
+        assert_eq!(
+            window.within("popup-menu").find(0_usize).label(),
+            Some("More")
+        );
+        window.within("popup-menu").hover(0_usize, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.within("submenu").find(0_usize).label(),
+            Some("Child command")
+        );
+        window.within("submenu").click(0_usize, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.child_chosen, 1);
+        assert_eq!(view.parent_chosen, 0);
+        assert_eq!(view.child_opened, 1);
+        assert_eq!(view.parent_opened, 0);
+    });
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("popup-menu").is_none());
+        window.right_click("parent-region", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.within("popup-menu").find(0_usize).label(),
+            Some("Parent command")
+        );
+        window.within("popup-menu").click(0_usize, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.parent_opened, 1);
+        assert_eq!(view.child_opened, 1);
+        assert_eq!(view.parent_chosen, 1);
+        assert_eq!(view.child_chosen, 1);
+    });
+    cx.update_window(handle.into(), |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("popup-menu").is_none());
+    })
+    .unwrap();
 }

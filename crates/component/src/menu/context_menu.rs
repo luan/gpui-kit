@@ -374,10 +374,6 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
         window: &mut Window,
         cx: &mut App,
     ) {
-        if let Some(element) = &mut request_layout.element {
-            element.paint(window, cx);
-        }
-
         // Take the builder before setting up element state to avoid borrow issues
         let builder = self.menu.clone();
 
@@ -395,6 +391,9 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
                         && event.button == MouseButton::Right
                         && hitbox.is_hovered(window)
                     {
+                        // The nearest context menu owns this physical press.
+                        cx.stop_propagation();
+
                         // Capture the focused element to restore focus to on dismiss.
                         // If focus is still on the previous menu, keep its captured focus.
                         let previous_focus_handle = window.focused(cx).and_then(|focused| {
@@ -464,6 +463,11 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
                 });
             },
         );
+
+        // Register the parent before descendants: mouse events bubble in reverse order.
+        if let Some(element) = &mut request_layout.element {
+            element.paint(window, cx);
+        }
     }
 }
 
