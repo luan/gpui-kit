@@ -80,7 +80,7 @@ pub trait TableDelegate: Sized + 'static {
         window: &mut Window,
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
-        div()
+        h_flex()
             .size_full()
             .child(self.column(col_ix, cx).name.clone())
     }
