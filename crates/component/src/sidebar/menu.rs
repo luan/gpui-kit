@@ -8,9 +8,9 @@ use crate::{
     v_flex,
 };
 use gpui::{
-    AnyElement, App, ClickEvent, ElementId, InteractiveElement as _, IntoElement,
-    ParentElement as _, Role, SharedString, StatefulInteractiveElement as _, StyleRefinement,
-    Styled, Window, div, percentage, prelude::FluentBuilder,
+    AnyElement, App, ClickEvent, ElementId, ImageSource, InteractiveElement as _, IntoElement,
+    ObjectFit, ParentElement as _, Role, SharedString, StatefulInteractiveElement as _,
+    StyleRefinement, Styled, StyledImage, Window, div, img, percentage, prelude::FluentBuilder,
 };
 use gpui_base::TestSupportExt as _;
 use std::rc::Rc;
@@ -89,10 +89,16 @@ impl Styled for SidebarMenu {
     }
 }
 
+#[derive(Clone)]
+pub(crate) enum SidebarIcon {
+    Vector(Icon),
+    Image(ImageSource),
+}
+
 /// Menu item for the [`SidebarMenu`]
 #[derive(Clone)]
 pub struct SidebarMenuItem {
-    icon: Option<Icon>,
+    icon: Option<SidebarIcon>,
     label: SharedString,
     accessibility_label: Option<SharedString>,
     label_style: StyleRefinement,
@@ -133,7 +139,13 @@ impl SidebarMenuItem {
 
     /// Set the icon for the menu item
     pub fn icon(mut self, icon: impl Into<Icon>) -> Self {
-        self.icon = Some(icon.into());
+        self.icon = Some(SidebarIcon::Vector(icon.into()));
+        self
+    }
+
+    /// Use a full-color image in place of the monochrome icon.
+    pub fn image(mut self, image: impl Into<ImageSource>) -> Self {
+        self.icon = Some(SidebarIcon::Image(image.into()));
         self
     }
 
@@ -312,7 +324,16 @@ impl SidebarItem for SidebarMenuItem {
                             .bg(cx.theme().tokens.sidebar_accent)
                             .text_color(cx.theme().sidebar_accent_foreground)
                     })
-                    .when_some(self.icon.clone(), |this, icon| this.child(icon))
+                    .when_some(self.icon.clone(), |this, icon| {
+                        this.child(match icon {
+                            SidebarIcon::Vector(icon) => icon.into_any_element(),
+                            SidebarIcon::Image(image) => img(image)
+                                .size_5()
+                                .flex_shrink_0()
+                                .object_fit(ObjectFit::Contain)
+                                .into_any_element(),
+                        })
+                    })
                     .when(is_collapsed, |this| {
                         this.justify_center().when(is_active, |this| {
                             this.bg(cx.theme().tokens.sidebar_accent)

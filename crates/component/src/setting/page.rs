@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Entity, InteractiveElement as _, IntoElement, ListAlignment, ListOffset,
-    ListState, ParentElement as _, SharedString, StyleRefinement, Styled, Window, div, list,
-    prelude::FluentBuilder as _, px,
+    AnyElement, App, Entity, ImageSource, InteractiveElement as _, IntoElement, ListAlignment,
+    ListOffset, ListState, ParentElement as _, SharedString, StyleRefinement, Styled, Window, div,
+    list, prelude::FluentBuilder as _, px,
 };
 use rust_i18n::t;
 
@@ -14,13 +14,14 @@ use crate::{
     label::Label,
     scroll::ScrollableElement,
     setting::{RenderOptions, SettingGroup, settings::SettingsState},
+    sidebar::SidebarIcon,
     v_flex,
 };
 
 /// A setting page that can contain multiple setting groups.
 #[derive(Clone)]
 pub struct SettingPage {
-    pub(super) icon: Option<Icon>,
+    pub(super) icon: Option<SidebarIcon>,
     resettable: bool,
     pub(super) default_open: bool,
     pub(super) title: SharedString,
@@ -66,7 +67,13 @@ impl SettingPage {
 
     /// Set the icon of the setting page.
     pub fn icon(mut self, icon: impl Into<Icon>) -> Self {
-        self.icon = Some(icon.into());
+        self.icon = Some(SidebarIcon::Vector(icon.into()));
+        self
+    }
+
+    /// Use a full-color image for the page's sidebar entry.
+    pub fn image(mut self, image: impl Into<ImageSource>) -> Self {
+        self.icon = Some(SidebarIcon::Image(image.into()));
         self
     }
 

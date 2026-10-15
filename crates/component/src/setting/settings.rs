@@ -7,7 +7,7 @@ use crate::{
     input::{Input, InputState},
     resizable_panel,
     setting::SettingPage,
-    sidebar::{Sidebar, SidebarMenu, SidebarMenuItem},
+    sidebar::{Sidebar, SidebarIcon, SidebarMenu, SidebarMenuItem},
 };
 use gpui::{
     App, AppContext as _, Axis, ElementId, Entity, IntoElement, ParentElement as _, Pixels,
@@ -159,7 +159,10 @@ impl Settings {
                         && (selected_index.group_ix.is_none() || groups.len() == 1);
                     SidebarMenuItem::new(page.title.clone())
                         .click_to_open(true)
-                        .when_some(page.icon.clone(), |this, icon| this.icon(icon))
+                        .when_some(page.icon.clone(), |this, icon| match icon {
+                            SidebarIcon::Vector(icon) => this.icon(icon),
+                            SidebarIcon::Image(image) => this.image(image),
+                        })
                         .default_open(page.default_open)
                         .active(is_page_active)
                         .on_click({

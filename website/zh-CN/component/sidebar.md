@@ -215,3 +215,11 @@ Sidebar::new()
             .child("Settings")
     )
 ```
+
+### 彩色图片
+
+使用 `image` 显示彩色图片，替代单色图标。调用 `image` 或 `icon` 会替换另一种内容。图片适配侧边栏图标区域，不改变行交互或键盘导航。
+
+```rust
+SidebarMenuItem::new("Profile").image("images/profile.png")
+```

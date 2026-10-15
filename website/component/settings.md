@@ -615,3 +615,11 @@ Settings::new("app-settings")
 [NumberFieldOptions]: https://docs.rs/gpui-component/latest/gpui_component/setting/struct.NumberFieldOptions.html
 [GroupBox]: ./group-box.md
 [Sizable]: https://docs.rs/gpui-component/latest/gpui_component/trait.Sizable.html
+
+### Colored images
+
+Use `image` for a full-color image instead of a monochrome icon. Calling `image` or `icon` replaces the other. Images fit the sidebar icon slot without changing row interaction or keyboard navigation.
+
+```rust
+SettingPage::new("Profile").image("images/profile.png")
+```

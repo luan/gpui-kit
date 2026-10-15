@@ -491,3 +491,11 @@ Sidebar::new()
             )
     )
 ```
+
+### Colored images
+
+Use `image` for a full-color image instead of a monochrome icon. Calling `image` or `icon` replaces the other. Images fit the sidebar icon slot without changing row interaction or keyboard navigation.
+
+```rust
+SidebarMenuItem::new("Profile").image("images/profile.png")
+```
