@@ -160,8 +160,11 @@ impl Settings {
                     SidebarMenuItem::new(page.title.clone())
                         .click_to_open(true)
                         .when_some(page.icon.clone(), |this, icon| match icon {
-                            SidebarIcon::Vector(icon) => this.icon(icon),
+                            SidebarIcon::Vector(icon) => this.icon(*icon),
                             SidebarIcon::Image(image) => this.image(image),
+                            SidebarIcon::Render(render) => {
+                                this.icon_renderer(move |window, cx| render(window, cx))
+                            }
                         })
                         .default_open(page.default_open)
                         .active(is_page_active)

@@ -91,8 +91,9 @@ impl Styled for SidebarMenu {
 
 #[derive(Clone)]
 pub(crate) enum SidebarIcon {
-    Vector(Icon),
+    Vector(Box<Icon>),
     Image(ImageSource),
+    Render(Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>),
 }
 
 /// Menu item for the [`SidebarMenu`]
@@ -139,13 +140,25 @@ impl SidebarMenuItem {
 
     /// Set the icon for the menu item
     pub fn icon(mut self, icon: impl Into<Icon>) -> Self {
-        self.icon = Some(SidebarIcon::Vector(icon.into()));
+        self.icon = Some(SidebarIcon::Vector(Box::new(icon.into())));
         self
     }
 
     /// Use a full-color image in place of the monochrome icon.
     pub fn image(mut self, image: impl Into<ImageSource>) -> Self {
         self.icon = Some(SidebarIcon::Image(image.into()));
+        self
+    }
+
+    /// Render custom icon artwork in the normal sidebar icon slot.
+    pub fn icon_renderer<F, E>(mut self, render: F) -> Self
+    where
+        E: IntoElement,
+        F: Fn(&mut Window, &mut App) -> E + 'static,
+    {
+        self.icon = Some(SidebarIcon::Render(Rc::new(move |window, cx| {
+            render(window, cx).into_any_element()
+        })));
         self
     }
 
@@ -326,7 +339,8 @@ impl SidebarItem for SidebarMenuItem {
                     })
                     .when_some(self.icon.clone(), |this, icon| {
                         this.child(match icon {
-                            SidebarIcon::Vector(icon) => icon.into_any_element(),
+                            SidebarIcon::Vector(icon) => (*icon).into_any_element(),
+                            SidebarIcon::Render(render) => render(window, cx),
                             SidebarIcon::Image(image) => img(image)
                                 .size_5()
                                 .flex_shrink_0()

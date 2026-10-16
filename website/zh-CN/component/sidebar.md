@@ -223,3 +223,5 @@ Sidebar::new()
 ```rust
 SidebarMenuItem::new("Profile").image("images/profile.png")
 ```
+
+图标需要自定义元素（例如像素画渲染器）时，使用 `icon_renderer`。回调接收窗口和应用上下文；返回元素应按侧栏图标槽位设置尺寸。`icon`、`image` 和 `icon_renderer` 相互替换。

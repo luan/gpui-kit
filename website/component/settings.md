@@ -623,3 +623,5 @@ Use `image` for a full-color image instead of a monochrome icon. Calling `image`
 ```rust
 SettingPage::new("Profile").image("images/profile.png")
 ```
+
+Use `icon_renderer` when artwork needs a custom element, such as a pixel-art renderer. The callback receives the window and application; size its result for the sidebar icon slot. `icon`, `image` and `icon_renderer` replace one another.

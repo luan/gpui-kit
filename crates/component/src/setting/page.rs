@@ -67,13 +67,25 @@ impl SettingPage {
 
     /// Set the icon of the setting page.
     pub fn icon(mut self, icon: impl Into<Icon>) -> Self {
-        self.icon = Some(SidebarIcon::Vector(icon.into()));
+        self.icon = Some(SidebarIcon::Vector(Box::new(icon.into())));
         self
     }
 
     /// Use a full-color image for the page's sidebar entry.
     pub fn image(mut self, image: impl Into<ImageSource>) -> Self {
         self.icon = Some(SidebarIcon::Image(image.into()));
+        self
+    }
+
+    /// Render custom artwork for the page's sidebar icon.
+    pub fn icon_renderer<F, E>(mut self, render: F) -> Self
+    where
+        E: IntoElement,
+        F: Fn(&mut Window, &mut App) -> E + 'static,
+    {
+        self.icon = Some(SidebarIcon::Render(Rc::new(move |window, cx| {
+            render(window, cx).into_any_element()
+        })));
         self
     }
 
