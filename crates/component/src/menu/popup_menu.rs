@@ -7,7 +7,7 @@ use crate::{ActiveTheme, ElementExt, Icon, IconName, Sizable as _, h_flex, v_fle
 use crate::{Side, Size, kbd::Kbd};
 use gpui::{
     Action, Anchor, AnyElement, App, AppContext, Bounds, Context, DismissEvent, Edges, Entity,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyBinding,
+    EventEmitter, FocusHandle, Focusable, Font, InteractiveElement, IntoElement, KeyBinding,
     ParentElement, Pixels, Render, Role, ScrollHandle, SharedString, StatefulInteractiveElement,
     Styled, WeakEntity, Window, anchored, deferred, div, prelude::FluentBuilder, px, rems,
 };
@@ -300,6 +300,7 @@ pub struct PopupMenu {
     bounds: Bounds<Pixels>,
     size: Size,
     check_side: Side,
+    font: Option<Font>,
 
     /// The parent menu of this menu, if this is a submenu
     parent_menu: Option<WeakEntity<Self>>,
@@ -344,6 +345,7 @@ impl PopupMenu {
             max_width: None,
             max_height: None,
             check_side: Side::Left,
+            font: None,
             bounds: Bounds::default(),
             scrollable: false,
             scroll_handle: ScrollHandle::default(),
@@ -360,7 +362,20 @@ impl PopupMenu {
         cx: &mut App,
         f: impl FnOnce(Self, &mut Window, &mut Context<PopupMenu>) -> Self,
     ) -> Entity<Self> {
-        cx.new(|cx| f(Self::new(cx), window, cx))
+        let font = window.text_style().font();
+        cx.new(|cx| f(Self::new(cx).font(font), window, cx))
+    }
+
+    /// Preserve typography from the surface that opened this deferred menu.
+    pub fn font(mut self, font: Font) -> Self {
+        self.font = Some(font);
+        self
+    }
+
+    /// Change the originating surface's typography on a retained menu.
+    pub fn set_font(&mut self, font: Font, cx: &mut Context<Self>) {
+        self.font = Some(font);
+        cx.notify();
     }
 
     /// Set the focus handle of Entity to handle actions.
@@ -712,7 +727,14 @@ impl PopupMenu {
         cx: &mut Context<Self>,
         f: impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static,
     ) -> Self {
-        let submenu = PopupMenu::build(window, cx, f);
+        let font = self.font.clone();
+        let submenu = PopupMenu::build(window, cx, move |menu, window, cx| {
+            f(
+                menu.when_some(font, |menu, font| menu.font(font)),
+                window,
+                cx,
+            )
+        });
         let parent_menu = cx.entity().downgrade();
         let parent_priority = self.priority;
         submenu.update(cx, |view, _| {
@@ -1458,6 +1480,7 @@ impl Render for PopupMenu {
                     menu.update(cx, |menu, _| {
                         menu.parent_menu = Some(parent.clone());
                         menu.priority = parent_priority + 1;
+                        menu.font = self.font.clone();
                     });
                 }
             }
@@ -1497,6 +1520,7 @@ impl Render for PopupMenu {
             .on_action(cx.listener(Self::dismiss))
             .on_mouse_down_out(cx.listener(Self::on_mouse_down_out))
             .popover_style(cx)
+            .when_some(self.font.clone(), |this, font| this.font(font))
             .text_color(cx.theme().popover_foreground)
             .relative()
             .occlude()

@@ -123,6 +123,7 @@ struct ContextMenuSharedState {
     /// Kept while open so replacing the menu preserves its input's selection
     /// after the input has left the focused-input registry.
     selection_input: Option<AnyInputState>,
+    font: gpui::Font,
     open: bool,
     position: Point<Pixels>,
     /// Registered on this element's dispatch node every frame and never
@@ -154,6 +155,7 @@ impl Default for ContextMenuState {
             shared_state: Rc::new(RefCell::new(ContextMenuSharedState {
                 menu_view: None,
                 selection_input: None,
+                font: gpui::font(".SystemUIFont"),
                 open: false,
                 position: Default::default(),
                 trigger_focus_handle: None,
@@ -372,6 +374,7 @@ impl<E: ParentElement + Styled + IntoElement + 'static> Element for ContextMenu<
         window: &mut Window,
         cx: &mut App,
     ) {
+        request_layout.shared_state.borrow_mut().font = window.text_style().font();
         let builder = self.menu.clone();
         let shared_state = request_layout.shared_state.clone();
 
@@ -469,7 +472,9 @@ fn open_menu(
                     .flatten()
                     .filter(|input| input.focus_handle(cx).is_focused(window))
                     .or(previous_selection_input);
+            let font = shared_state.borrow().font.clone();
             let menu = PopupMenu::build(window, cx, move |menu, window, cx| {
+                let menu = menu.font(font);
                 let Some(build) = &builder else {
                     return menu;
                 };

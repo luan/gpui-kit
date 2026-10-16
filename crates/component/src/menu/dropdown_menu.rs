@@ -106,6 +106,7 @@ where
         cx: &mut App,
     ) -> Popover {
         let builder = self.builder.clone();
+        let font = window.text_style().font();
         let menu_state =
             window.use_keyed_state(self.id.clone(), cx, |_, _| DropdownMenuState::default());
 
@@ -128,8 +129,9 @@ where
                     Some(menu) => menu,
                     None => {
                         let builder = builder.clone();
+                        let font = font.clone();
                         let menu = PopupMenu::build(window, cx, move |menu, window, cx| {
-                            builder(menu, window, cx)
+                            builder(menu.font(font), window, cx)
                         });
                         menu.update(cx, |menu, cx| {
                             menu.set_trigger_focus(Some(trigger_focus.clone()), cx)
